@@ -1,0 +1,15 @@
+<RCC>
+  <qresource>
+    <file>white/menu_whie.png</file>
+    <file>white/dashboard_white.png</file>
+    <file>white/dumbbell_white.png</file>
+    <file>white/exercises_white.png</file>
+    <file>white/help_white.png</file>
+    <file>white/history_white.png</file>
+    <file>white/home_white.png</file>
+    <file>white/log_out_white.png</file>
+    <file>white/profile_white.png</file>
+    <file>white/settings_white.png</file>
+    <file>white/statistics_white.png</file>
+  </qresource>
+</RCC>

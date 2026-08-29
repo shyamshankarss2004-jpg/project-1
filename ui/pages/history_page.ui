@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>836</width>
+    <height>825</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QCalendarWidget QWidget#qt_calendar_navigationbar {
+        background-color: #2196F3; /* Niebieski kolor */
+        color: white;
+    }
+    QCalendarWidget QToolButton {
+        color: white; /* Kolor tekstu przycisków */
+        background-color: #1976D2; /* Kolor tła przycisków */
+        border: none;
+    }
+    QCalendarWidget QToolButton:hover {
+        background-color: #0D47A1; /* Kolor tła przycisków po najechaniu */
+    }</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_2" stretch="2,1">
+   <item>
+    <widget class="QCalendarWidget" name="calendarWidget">
+     <property name="font">
+      <font>
+       <family>Segoe UI</family>
+       <pointsize>18</pointsize>
+       <weight>75</weight>
+       <italic>false</italic>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="cursor">
+      <cursorShape>PointingHandCursor</cursorShape>
+     </property>
+     <property name="autoFillBackground">
+      <bool>false</bool>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"> QCalendarWidget{
+background-color: rgb(190, 190, 190);
+border: 2px solid rgb(120, 120, 120);
+border-radius: 8px;
+ 
+}           
+
+ QCalendarWidget QWidget#qt_calendar_navigationbar {
+                background-color: rgb(75, 75, 75);
+color: white;
+ 
+            }
+            
+            QCalendarWidget QToolButton {
+               background-color: rgb(75, 75, 75);
+color: white;
+ 
+                color: white;
+                font-size: 20px; 
+            }
+            
+            QCalendarWidget QToolButton:hover {
+                background-color: rgb(100, 100, 100);
+            }
+
+            QCalendarWidget QToolButton#qt_calendar_yearbutton,
+            QCalendarWidget QToolButton#qt_calendar_monthbutton {
+                background-color: rgb(75, 75, 75); 
+                color: white; 
+            }
+
+            QCalendarWidget QToolButton#qt_calendar_yearbutton:hover,
+            QCalendarWidget QToolButton#qt_calendar_monthbutton:hover {
+                background-color: rgb(100, 100, 100); 
+            }</string>
+     </property>
+     <property name="minimumDate">
+      <date>
+       <year>2000</year>
+       <month>1</month>
+       <day>1</day>
+      </date>
+     </property>
+     <property name="maximumDate">
+      <date>
+       <year>2100</year>
+       <month>12</month>
+       <day>31</day>
+      </date>
+     </property>
+     <property name="gridVisible">
+      <bool>true</bool>
+     </property>
+     <property name="horizontalHeaderFormat">
+      <enum>QCalendarWidget::NoHorizontalHeader</enum>
+     </property>
+     <property name="verticalHeaderFormat">
+      <enum>QCalendarWidget::NoVerticalHeader</enum>
+     </property>
+     <property name="dateEditEnabled">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="widget" native="true">
+     <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="history_label">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>35</height>
+         </size>
+        </property>
+        <property name="font">
+         <font>
+          <family>Segoe UI Semibold</family>
+          <pointsize>15</pointsize>
+          <weight>50</weight>
+          <bold>false</bold>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: rgb(75, 75, 75);
+color: white;
+border-radius: 8px;
+ </string>
+        </property>
+        <property name="text">
+         <string>Historia z dnia: [daty]</string>
+        </property>
+        <property name="scaledContents">
+         <bool>false</bool>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="widget_2" native="true">
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QListWidget" name="workouts_list">
+           <property name="font">
+            <font>
+             <family>Segoe UI</family>
+             <pointsize>15</pointsize>
+            </font>
+           </property>
+           <property name="cursor" stdset="0">
+            <cursorShape>ArrowCursor</cursorShape>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(190, 190, 190);
+border: 2px solid rgb(120, 120, 120);
+border-radius: 8px;
+ </string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QListWidget" name="exercises_list">
+           <property name="font">
+            <font>
+             <family>Segoe UI Light</family>
+             <pointsize>14</pointsize>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(190, 190, 190);
+border: 2px solid rgb(120, 120, 120);
+border-radius: 8px;
+ </string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

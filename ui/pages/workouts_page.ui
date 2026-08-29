@@ -1,0 +1,440 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1079</width>
+    <height>572</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QHBoxLayout" name="horizontalLayout">
+   <item>
+    <widget class="QWidget" name="widget_left" native="true">
+     <layout class="QVBoxLayout" name="verticalLayout_3">
+      <item>
+       <widget class="QListWidget" name="list_workouts">
+        <property name="font">
+         <font>
+          <pointsize>18</pointsize>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: rgb(190, 190, 190);
+border: 2px solid rgb(120, 120, 120);
+border-radius: 8px;
+ </string>
+        </property>
+        <item>
+         <property name="text">
+          <string>Workout 1</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Workout 2</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Workout 3</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="new_workout_widget_2" native="true">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>50</height>
+         </size>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_6">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QPushButton" name="add_workout_button_2">
+           <property name="font">
+            <font>
+             <pointsize>-1</pointsize>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+                padding: 10px;
+                font-size: 18px;
+                color: #ffffff;
+                background-color: #4CAF50;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #388e3c;
+            }</string>
+           </property>
+           <property name="text">
+            <string>Add new workout</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="new_workout_widget" native="true">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>50</height>
+         </size>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_4">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QLineEdit" name="workout_name_line">
+           <property name="font">
+            <font>
+             <family>Segoe UI Light</family>
+             <pointsize>16</pointsize>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(190, 190, 190);
+border: 2px solid rgb(120, 120, 120);
+border-radius: 8px;
+ </string>
+           </property>
+           <property name="placeholderText">
+            <string>Workout name</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="add_workout_button">
+           <property name="font">
+            <font>
+             <pointsize>-1</pointsize>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+                padding: 10px;
+                font-size: 18px;
+                color: #ffffff;
+                background-color: #4CAF50;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #388e3c;
+            }</string>
+           </property>
+           <property name="text">
+            <string>Add new workout</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="delete_workout_button">
+        <property name="font">
+         <font>
+          <pointsize>-1</pointsize>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QPushButton {
+    padding: 10px;
+    font-size: 18px;
+    color: #ffffff;
+    background-color: rgb(255, 87, 90);
+    border: none;
+    border-radius: 5px;
+}
+QPushButton:hover {
+    background-color: #e53935; 
+}
+QPushButton:pressed {
+    background-color: #d32f2f; 
+}
+</string>
+        </property>
+        <property name="text">
+         <string>Delete workout</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="widget_right" native="true">
+     <layout class="QVBoxLayout" name="verticalLayout_4">
+      <item>
+       <widget class="QListWidget" name="list_workout_exercises">
+        <property name="font">
+         <font>
+          <family>Segoe UI Light</family>
+          <pointsize>18</pointsize>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color: rgb(190, 190, 190);
+border: 2px solid rgb(120, 120, 120);
+border-radius: 8px;
+ </string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="new_exercise_widget_2" native="true">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>50</height>
+         </size>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_5">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QPushButton" name="add_workout_exercise_button_2">
+           <property name="font">
+            <font>
+             <pointsize>-1</pointsize>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+                padding: 10px;
+                font-size: 18px;
+                color: #ffffff;
+                background-color: #4CAF50;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #388e3c;
+            }</string>
+           </property>
+           <property name="text">
+            <string>Add exercise</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QWidget" name="new_exercise_widget" native="true">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>50</height>
+         </size>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_3">
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QComboBox" name="exercises_box">
+           <property name="minimumSize">
+            <size>
+             <width>200</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <family>Segoe UI Light</family>
+             <pointsize>16</pointsize>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(190, 190, 190);
+border: 2px solid rgb(120, 120, 120);
+border-radius: 8px;
+ </string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="label">
+           <property name="font">
+            <font>
+             <family>Segoe UI Light</family>
+             <pointsize>14</pointsize>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(190, 190, 190);
+border: 2px solid rgb(120, 120, 120);
+border-radius: 8px;
+ </string>
+           </property>
+           <property name="text">
+            <string>Repetitions:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSpinBox" name="rep_box">
+           <property name="maximumSize">
+            <size>
+             <width>35</width>
+             <height>55</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <family>Segoe UI Light</family>
+             <pointsize>19</pointsize>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(190, 190, 190);
+border: 2px solid rgb(120, 120, 120);
+border-radius: 8px;
+ </string>
+           </property>
+           <property name="wrapping">
+            <bool>false</bool>
+           </property>
+           <property name="buttonSymbols">
+            <enum>QAbstractSpinBox::NoButtons</enum>
+           </property>
+           <property name="prefix">
+            <string/>
+           </property>
+           <property name="minimum">
+            <number>1</number>
+           </property>
+           <property name="maximum">
+            <number>20</number>
+           </property>
+           <property name="value">
+            <number>5</number>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="add_workout_exercise_button">
+           <property name="font">
+            <font>
+             <pointsize>-1</pointsize>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+                padding: 10px;
+                font-size: 18px;
+                color: #ffffff;
+                background-color: #4CAF50;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #388e3c;
+            }</string>
+           </property>
+           <property name="text">
+            <string>Add</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="delete_exercise_button">
+        <property name="font">
+         <font>
+          <pointsize>-1</pointsize>
+         </font>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QPushButton {
+    padding: 10px;
+    font-size: 18px;
+    color: #ffffff;
+    background-color: rgb(255, 87, 90);
+    border: none;
+    border-radius: 5px;
+}
+QPushButton:hover {
+    background-color: #e53935; 
+}
+QPushButton:pressed {
+    background-color: #d32f2f; 
+}
+</string>
+        </property>
+        <property name="text">
+         <string>Delete exercise</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>add_workout_button</tabstop>
+  <tabstop>delete_workout_button</tabstop>
+  <tabstop>list_workout_exercises</tabstop>
+  <tabstop>delete_exercise_button</tabstop>
+  <tabstop>add_workout_button_2</tabstop>
+  <tabstop>workout_name_line</tabstop>
+  <tabstop>list_workouts</tabstop>
+  <tabstop>add_workout_exercise_button_2</tabstop>
+  <tabstop>exercises_box</tabstop>
+  <tabstop>rep_box</tabstop>
+  <tabstop>add_workout_exercise_button</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>
