@@ -124,5 +124,19 @@
     "duration": "0 min 16 sec",
     "date": "2026-10-19",
     "time": "18:26:44"
+  },
+  {
+    "exercise": "Jumping Jacks",
+    "reps": 10,
+    "duration": "0 min 15 sec",
+    "date": "2026-10-19",
+    "time": "18:27:06"
+  },
+  {
+    "exercise": "Pull-up",
+    "reps": 4,
+    "duration": "0 min 11 sec",
+    "date": "2026-10-19",
+    "time": "18:27:25"
   }
 ]
