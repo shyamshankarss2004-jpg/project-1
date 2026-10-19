@@ -11,6 +11,9 @@ Run with:
     streamlit run streamlit_app.py
 """
 
+import os
+import sys
+import tempfile
 import math
 import time
 import datetime
@@ -19,6 +22,8 @@ import cv2
 import numpy as np
 import mediapipe as mp
 import streamlit as st
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 from modules.posture_analyzer import (
     analyze_squat_form,
@@ -66,19 +71,67 @@ _GREEN_BGR     = (0, 200, 0)
 _RED_BGR       = (0, 0, 220)
 _FONT          = cv2.FONT_HERSHEY_SIMPLEX
 
+# ── Camera Probe Helper ────────────────────────────────────────────────────────
+
+def check_camera_devices(force_refresh=False):
+    """Probe camera devices and return available camera indexes and resolutions."""
+    if not force_refresh and "camera_list" in st.session_state and st.session_state.camera_list is not None:
+        return st.session_state.camera_list
+
+    if st.session_state.get("running", False):
+        return st.session_state.get("camera_list", [])
+
+    available = []
+    for idx in range(2):
+        cap = None
+        try:
+            if sys.platform == "win32":
+                cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+                if not cap.isOpened():
+                    cap = cv2.VideoCapture(idx)
+            else:
+                cap = cv2.VideoCapture(idx)
+
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    h, w = frame.shape[:2]
+                    available.append({"index": idx, "res": f"{w}x{h}"})
+        except Exception:
+            pass
+        finally:
+            if cap is not None:
+                try:
+                    cap.release()
+                except Exception:
+                    pass
+
+    st.session_state["camera_list"] = available
+    return available
+
+
 # ── Session-state initialisation ───────────────────────────────────────────────
+_IS_CLOUD = os.path.exists("/mount/src") or "STREAMLIT_SHARING_HOST" in os.environ
+_INITIAL_CAMS = check_camera_devices()
+_DEFAULT_INPUT = "Live Webcam" if _INITIAL_CAMS else "Sample Video"
+
 _DEFAULTS = {
-    "running":    False,
-    "cap":        None,
-    "pose":       None,
-    "mp_pose":    None,
-    "mp_draw":    None,
-    "counter":    0,
-    "stage":      None,
-    "form_msg":   "Press ▶ Start Workout to begin",
-    "form_ok":    True,
-    "start_time": None,
-    "exercise":   "Squats",
+    "running":        False,
+    "cap":            None,
+    "pose":           None,
+    "mp_pose":        None,
+    "mp_draw":        None,
+    "counter":        0,
+    "stage":          None,
+    "form_msg":       "Press ▶ Start to begin workout tracking",
+    "form_ok":        True,
+    "start_time":     None,
+    "exercise":       "Squats",
+    "input_mode":     _DEFAULT_INPUT,
+    "selected_cam":   0,
+    "video_path":     os.path.join(BASE_DIR, "demo", "How-to-do-SnapYT.App.mp4"),
+    "is_video_file":  False,
+    "camera_list":    _INITIAL_CAMS,
 }
 for _k, _v in _DEFAULTS.items():
     if _k not in st.session_state:
@@ -304,7 +357,8 @@ with st.sidebar:
     st.title("Virtual Personal Trainer")
     st.markdown("---")
 
-    st.markdown('<p class="section-title">Select Exercise</p>', unsafe_allow_html=True)
+    # 1. Exercise selection
+    st.markdown('<p class="section-title">1. Select Exercise</p>', unsafe_allow_html=True)
     selected_exercise = st.selectbox(
         label="Exercise",
         options=_EXERCISES,
@@ -319,35 +373,171 @@ with st.sidebar:
         st.session_state.form_ok  = True
 
     st.markdown("---")
-    st.markdown('<p class="section-title">Session Controls</p>', unsafe_allow_html=True)
+
+    # 2. Input Source & Verification
+    st.markdown('<p class="section-title">2. Video Input Source</p>', unsafe_allow_html=True)
+    input_mode = st.radio(
+        "Choose Input Source",
+        options=["Live Webcam", "Sample Video", "Upload Video", "Camera Snapshot"],
+        index=["Live Webcam", "Sample Video", "Upload Video", "Camera Snapshot"].index(st.session_state.get("input_mode", _DEFAULT_INPUT)),
+        label_visibility="collapsed",
+    )
+    st.session_state.input_mode = input_mode
+
+    # Camera Verification & Status Card
+    cams = check_camera_devices()
+
+    col_stat, col_btn = st.columns([4, 1])
+    with col_stat:
+        if cams:
+            cam_info = ", ".join([f"Device #{c['index']} ({c['res']})" for c in cams])
+            st.markdown(
+                f"""
+                <div style="background: rgba(46, 160, 67, 0.15); border: 1px solid #2ea043; border-radius: 8px; padding: 10px; margin-top: 6px; margin-bottom: 8px;">
+                    <div style="color: #3fb950; font-weight: 700; font-size: 0.92rem;">🟢 Camera Connected</div>
+                    <div style="color: #8b949e; font-size: 0.78rem; margin-top: 3px;">{cam_info}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            env_label = "Streamlit Cloud Container" if _IS_CLOUD else "Local Host"
+            st.markdown(
+                f"""
+                <div style="background: rgba(248, 81, 73, 0.15); border: 1px solid #f85149; border-radius: 8px; padding: 10px; margin-top: 6px; margin-bottom: 8px;">
+                    <div style="color: #f85149; font-weight: 700; font-size: 0.92rem;">🔴 Camera Not Connected</div>
+                    <div style="color: #8b949e; font-size: 0.78rem; margin-top: 3px;">No hardware camera found on {env_label}.</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+    with col_btn:
+        st.write("")
+        if st.button("🔄", help="Re-scan connected cameras"):
+            st.session_state.camera_list = None
+            check_camera_devices(force_refresh=True)
+            st.rerun()
+
+    with st.expander("🔍 Camera Verification & Setup Help", expanded=False):
+        if cams:
+            st.success(f"Hardware camera ready! Detected {len(cams)} device(s):")
+            for c in cams:
+                st.write(f"- **Camera #{c['index']}**: Resolution {c['res']}")
+        else:
+            if _IS_CLOUD:
+                st.info(
+                    "🌐 **Why does it show 'Camera Not Connected' in Cloud?**\n\n"
+                    "Streamlit Cloud runs inside a remote Linux container in a data center without physical USB webcam hardware.\n\n"
+                    "👉 **To test right now on Streamlit Cloud:**\n"
+                    "- Switch to **'🎬 Sample Video'** or **'📁 Upload Video'** above to see live skeleton tracking and rep counting.\n"
+                    "- Or switch to **'📸 Camera Snapshot'** to test single-frame analysis with your browser webcam.\n\n"
+                    "👉 **To use continuous live webcam:**\n"
+                    "- Run the project on your laptop terminal:\n"
+                    "```bash\nstreamlit run streamlit_app.py\n```\n"
+                    "- Your local webcam will be automatically detected (🟢 Connected) and streamed live!"
+                )
+            else:
+                st.warning(
+                    "⚠️ **No camera detected on this PC:**\n"
+                    "- Ensure your USB camera is plugged in.\n"
+                    "- Verify another app (Zoom, Teams, Camera app) is not occupying it.\n"
+                    "- Click the 🔄 button above to re-scan."
+                )
+
+    if input_mode == "Live Webcam":
+        if cams:
+            cam_indices = [c["index"] for c in cams]
+            selected_cam = st.selectbox(
+                "Select Camera",
+                options=cam_indices,
+                format_func=lambda i: f"Camera #{i} ({next(c['res'] for c in cams if c['index'] == i)})",
+            )
+            st.session_state.selected_cam = selected_cam
+        else:
+            if _IS_CLOUD:
+                st.warning("⚠️ Live Webcam via OpenCV requires running locally. In Cloud, switch to '🎬 Sample Video' or '📁 Upload Video' above.")
+            else:
+                st.warning("⚠️ No camera detected. Plug in a webcam and click 🔄 above.")
+
+    elif input_mode == "Sample Video":
+        sample_dict = {
+            "Squats Demo Video": os.path.join(BASE_DIR, "demo", "How-to-do-SnapYT.App.mp4"),
+            "Squats Demo Video #2": os.path.join(BASE_DIR, "demo", "How-to-do-SnapYT.App (1).mp4"),
+            "Pull-up Demo Video": os.path.join(BASE_DIR, "demo", "Pullup-Exercise-SnapYT.App.mp4"),
+        }
+        chosen_sample_name = st.selectbox("Select Sample Video", options=list(sample_dict.keys()))
+        st.session_state.video_path = sample_dict[chosen_sample_name]
+        st.caption(f"📁 Source: `{os.path.basename(st.session_state.video_path)}`")
+
+    elif input_mode == "Upload Video":
+        uploaded_file = st.file_uploader("Upload workout video (.mp4, .mov, .avi)", type=["mp4", "mov", "avi"])
+        if uploaded_file is not None:
+            tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+            tfile.write(uploaded_file.read())
+            tfile.flush()
+            st.session_state.video_path = tfile.name
+            st.success("✅ Video file ready for workout!")
+
+    elif input_mode == "Camera Snapshot":
+        st.caption("📸 Capture frames directly through your browser webcam below.")
+
+    st.markdown("---")
+    st.markdown('<p class="section-title">3. Session Controls</p>', unsafe_allow_html=True)
 
     col_s, col_t = st.columns(2)
     start_clicked = col_s.button("▶ Start", use_container_width=True, type="primary")
     stop_clicked  = col_t.button("⏹ Stop",  use_container_width=True)
 
     if start_clicked and not st.session_state.running:
-        cap = cv2.VideoCapture(0)
-        if not cap.isOpened():
-            st.error("❌ Webcam not detected. Please connect a camera and try again.")
-        else:
-            st.session_state.cap        = cap
-            st.session_state.mp_pose   = mp.solutions.pose
-            st.session_state.mp_draw   = mp.solutions.drawing_utils
-            st.session_state.pose      = mp.solutions.pose.Pose(
+        cap = None
+        is_vid = False
+
+        if input_mode == "Live Webcam":
+            cam_idx = st.session_state.get("selected_cam", 0)
+            if sys.platform == "win32":
+                cap = cv2.VideoCapture(cam_idx, cv2.CAP_DSHOW)
+                if not cap.isOpened():
+                    cap = cv2.VideoCapture(cam_idx)
+            else:
+                cap = cv2.VideoCapture(cam_idx)
+
+            if not cap.isOpened():
+                if _IS_CLOUD:
+                    st.error("❌ Camera not detected on cloud host. Please switch to '🎬 Sample Video' or '📁 Upload Video' above to run the AI tracker on Streamlit Cloud.")
+                else:
+                    st.error(f"❌ Camera #{cam_idx} could not be opened. Please verify it is connected and not in use by another app.")
+                cap = None
+        elif input_mode in ("Sample Video", "Upload Video"):
+            vid_path = st.session_state.get("video_path")
+            if not vid_path or not os.path.exists(vid_path):
+                st.error("❌ Please choose or upload a valid video file first.")
+            else:
+                cap = cv2.VideoCapture(vid_path)
+                if not cap.isOpened():
+                    st.error(f"❌ Could not open video file: {os.path.basename(vid_path)}")
+                    cap = None
+                else:
+                    is_vid = True
+
+        if cap is not None and cap.isOpened():
+            st.session_state.cap           = cap
+            st.session_state.is_video_file = is_vid
+            st.session_state.mp_pose      = mp.solutions.pose
+            st.session_state.mp_draw      = mp.solutions.drawing_utils
+            st.session_state.pose         = mp.solutions.pose.Pose(
                 static_image_mode=False, model_complexity=1,
                 enable_segmentation=False,
                 min_detection_confidence=_MIN_VIS,
                 min_tracking_confidence=_MIN_VIS,
             )
-            st.session_state.counter   = 0
-            st.session_state.stage     = None
-            st.session_state.start_time= time.time()
-            st.session_state.running   = True
-            st.session_state.form_msg  = "Workout started!"
-            st.session_state.form_ok   = True
+            st.session_state.counter      = 0
+            st.session_state.stage        = None
+            st.session_state.start_time   = time.time()
+            st.session_state.running      = True
+            st.session_state.form_msg     = "Workout tracking active!"
+            st.session_state.form_ok      = True
 
     if stop_clicked and st.session_state.running:
-        # Save JSON session log
         if st.session_state.start_time:
             try:
                 sl = SessionLogger()
@@ -380,13 +570,32 @@ st.markdown("---")
 
 left_col, right_col = st.columns([2, 1], gap="large")
 
-# ── Left: Camera feed ──────────────────────────────────────────────────────────
+# ── Left: Camera / Video feed ──────────────────────────────────────────────────
 with left_col:
-    st.markdown('<p class="section-title">📷 Live Camera Feed</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">📷 Workout Feed</p>', unsafe_allow_html=True)
     frame_placeholder = st.empty()
 
-    if not st.session_state.running:
-        frame_placeholder.info("Camera is off. Press **▶ Start** in the sidebar to begin.")
+    if input_mode == "Camera Snapshot":
+        camera_photo = st.camera_input("Take a snapshot with your browser camera to evaluate form")
+        if camera_photo is not None:
+            bytes_data = camera_photo.getvalue()
+            cv2_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+            if cv2_img is not None:
+                if st.session_state.pose is None:
+                    st.session_state.mp_pose = mp.solutions.pose
+                    st.session_state.mp_draw = mp.solutions.drawing_utils
+                    st.session_state.pose = mp.solutions.pose.Pose(
+                        static_image_mode=True, model_complexity=1,
+                        enable_segmentation=False,
+                        min_detection_confidence=_MIN_VIS,
+                    )
+                annotated = _process_frame(cv2_img, st.session_state.exercise)
+                st.image(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB), caption="Analyzed Pose", use_column_width=True)
+    elif not st.session_state.running:
+        if input_mode == "Live Webcam":
+            frame_placeholder.info("Webcam feed is inactive. Verify camera connection in sidebar and press **▶ Start**.")
+        elif input_mode in ("Sample Video", "Upload Video"):
+            frame_placeholder.info(f"Ready to play **{input_mode}**. Press **▶ Start** in the sidebar to begin AI analysis.")
 
 # ── Right: Stats panel ─────────────────────────────────────────────────────────
 with right_col:
@@ -429,27 +638,31 @@ _render_stats()
 
 
 # ── Live frame loop ────────────────────────────────────────────────────────────
-if st.session_state.running:
+if st.session_state.running and input_mode != "Camera Snapshot":
     cap = st.session_state.cap
     if cap is None or not cap.isOpened():
-        st.error("❌ Camera disconnected. Please restart the workout.")
+        st.error("❌ Video source disconnected. Please restart the workout.")
         st.session_state.running = False
     else:
         ret, frame = cap.read()
         if not ret:
-            st.warning("⚠️ Could not read camera frame. Check your webcam.")
-        else:
-            frame = cv2.flip(frame, 1)
+            if st.session_state.get("is_video_file", False):
+                # Loop video seamlessly from the beginning
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                ret, frame = cap.read()
+            else:
+                st.warning("⚠️ Could not read camera frame. Check your webcam connection.")
+        if ret and frame is not None:
+            if not st.session_state.get("is_video_file", False):
+                frame = cv2.flip(frame, 1)
             try:
                 frame = _process_frame(frame, st.session_state.exercise)
             except Exception as exc:
                 _put_text(frame, f"Error: {exc}", (10, 30), (0, 0, 220))
 
-            # Display the annotated frame
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame_placeholder.image(frame_rgb, channels="RGB", use_column_width=True)
 
-        # Refresh stats and trigger next frame via rerun
         _render_stats()
         time.sleep(0.03)      # ~30 fps cap
         st.rerun()
