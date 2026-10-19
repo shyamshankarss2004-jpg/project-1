@@ -13,6 +13,7 @@ import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QStackedWidget
 
 from config import APP_TITLE, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT
+from data.database_manager import init_db
 from utils.logger import get_logger
 from windows.login_window import LoginWindow
 from windows.new_account_window import NewAccountWindow
@@ -85,6 +86,7 @@ class MainApp(QMainWindow):
 
 def main():
     """Initialise the Qt application and start the event loop."""
+    init_db()
     app = QApplication(sys.argv)
     window = MainApp()
     window.show()

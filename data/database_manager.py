@@ -8,6 +8,7 @@ own short-lived connection using a context manager so resources are
 always released promptly.
 """
 
+import os
 import sqlite3
 
 from utils.logger import get_logger
@@ -15,11 +16,203 @@ from utils.resource_helper import resource_path
 
 logger = get_logger(__name__)
 
-# ── Private helper ─────────────────────────────────────────────────────────────
+# ── Private helper & Initialization ──────────────────────────────────────────
+
+_db_initialized = False
+
+
+def init_db(db_path: str = None) -> None:
+    """Initialize database tables and default seed data if they do not exist."""
+    global _db_initialized
+    path = db_path or resource_path("data/database.db")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    try:
+        with sqlite3.connect(path) as conn:
+            conn.execute("PRAGMA foreign_keys = ON;")
+            cursor = conn.cursor()
+
+            # 1. users table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password TEXT NOT NULL,
+                    name TEXT DEFAULT ''
+                );
+            """)
+
+            # 2. settings table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL UNIQUE,
+                    mode TEXT DEFAULT 'auto',
+                    prepare INTEGER DEFAULT 5,
+                    rep INTEGER DEFAULT 2,
+                    volume INTEGER DEFAULT 50,
+                    camera TEXT DEFAULT '',
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+            """)
+
+            # 3. muscle_group table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS muscle_group (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL
+                );
+            """)
+
+            # 4. exercises table
+            # Column order must match index lookups in exercises_page.py (name=idx 3, camera=idx 4, desc=idx 5)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS exercises (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    muscle_id INTEGER,
+                    created_by_user_id INTEGER,
+                    name TEXT UNIQUE NOT NULL,
+                    camera INTEGER DEFAULT 0,
+                    description TEXT DEFAULT '',
+                    FOREIGN KEY (muscle_id) REFERENCES muscle_group(id) ON DELETE SET NULL,
+                    FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+            """)
+
+            # 5. workout_plans table
+            # Column order must match index lookups in home_page.py and workout_page.py (name=idx 2)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS workout_plans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_by_user_id INTEGER,
+                    name TEXT NOT NULL,
+                    FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+            """)
+
+            # 6. id_exercises_id_workout junction table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS id_exercises_id_workout (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id_workout INTEGER NOT NULL,
+                    id_exercise INTEGER NOT NULL,
+                    reps INTEGER NOT NULL DEFAULT 10,
+                    FOREIGN KEY (id_workout) REFERENCES workout_plans(id) ON DELETE CASCADE,
+                    FOREIGN KEY (id_exercise) REFERENCES exercises(id) ON DELETE CASCADE
+                );
+            """)
+
+            # 7. history table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    workout_name TEXT NOT NULL,
+                    year INTEGER NOT NULL,
+                    month INTEGER NOT NULL,
+                    day INTEGER NOT NULL,
+                    hour INTEGER NOT NULL,
+                    minute INTEGER NOT NULL,
+                    exercises TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+            """)
+
+            # Seed default muscle groups
+            muscle_groups = ["Abs", "Arms", "Chest", "Full Body", "Legs", "Back"]
+            for mg in muscle_groups:
+                cursor.execute("INSERT OR IGNORE INTO muscle_group (name) VALUES (?)", (mg,))
+
+            # Fetch muscle group mapping for exercises
+            cursor.execute("SELECT name, id FROM muscle_group")
+            mg_map = dict(cursor.fetchall())
+
+            # Seed default exercises
+            default_exercises = [
+                ("Squats", mg_map.get("Legs"), 1, "Stand with feet shoulder-width apart. Lower hips down and back while keeping chest up and knees behind toes."),
+                ("Push-ups", mg_map.get("Chest"), 1, "Keep hands shoulder-width apart, body in a straight plank, lower chest to floor and push back up."),
+                ("Pull-up", mg_map.get("Back", mg_map.get("Arms")), 1, "Grip the overhead bar with palms facing away. Pull chest up to the bar and lower with control."),
+                ("Jumping Jacks", mg_map.get("Full Body"), 1, "Jump spreading legs wide while clapping hands overhead, then return to starting position."),
+                ("Bicep Curls", mg_map.get("Arms"), 1, "Hold weights at sides with palms forward. Curl weights towards shoulders while keeping elbows stationary."),
+                ("Overhead Press", mg_map.get("Arms"), 1, "Press weights vertically overhead from shoulder level until arms are fully extended."),
+                ("Lunges", mg_map.get("Legs"), 1, "Step forward with one leg, lowering hips until both knees are bent at about 90 degrees."),
+                ("Dips", mg_map.get("Arms"), 0, "Support body on parallel bars or bench, lower body until elbows reach 90 degrees, then push up."),
+                ("Chest Flys", mg_map.get("Chest"), 0, "Lie flat and bring dumbbells together above chest in an arc, keeping slight bend in elbows."),
+                ("Single-leg Squats", mg_map.get("Legs"), 0, "Balance on one leg while lowering into a squat, extending the opposite leg forward."),
+                ("Tricep Extensions in Plank", mg_map.get("Abs"), 0, "In plank position, press up from forearms to palms to engage triceps and core."),
+                ("Front Arm Raises", mg_map.get("Arms"), 0, "Raise dumbbells in front of body to shoulder height with straight arms."),
+                ("Plank Arm Raises", mg_map.get("Abs"), 0, "Hold forearm plank and alternately reach one arm straight out in front."),
+            ]
+
+            for name, m_id, cam, desc in default_exercises:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO exercises (name, muscle_id, created_by_user_id, camera, description)
+                    VALUES (?, ?, NULL, ?, ?)
+                """, (name, m_id, cam, desc))
+
+            # Seed default workout plans
+            default_workouts = [
+                ("Form Training", [
+                    ("Squats", 10),
+                    ("Overhead Press", 10),
+                    ("Bicep Curls", 10),
+                    ("Jumping Jacks", 15),
+                ]),
+                ("Full Body Strength", [
+                    ("Push-ups", 10),
+                    ("Squats", 15),
+                    ("Pull-up", 5),
+                    ("Jumping Jacks", 20),
+                ]),
+                ("Strength & Endurance", [
+                    ("Jumping Jacks", 30),
+                    ("Push-ups", 15),
+                    ("Squats", 20),
+                    ("Dips", 10),
+                ]),
+                ("Arms & Chest", [
+                    ("Push-ups", 12),
+                    ("Bicep Curls", 10),
+                    ("Overhead Press", 10),
+                    ("Dips", 10),
+                    ("Chest Flys", 12),
+                ]),
+                ("Legs & Glutes", [
+                    ("Squats", 15),
+                    ("Lunges", 12),
+                    ("Single-leg Squats", 8),
+                    ("Jumping Jacks", 20),
+                ]),
+            ]
+
+            for w_name, w_exercises in default_workouts:
+                cursor.execute("SELECT id FROM workout_plans WHERE name = ? AND created_by_user_id IS NULL", (w_name,))
+                w_row = cursor.fetchone()
+                if not w_row:
+                    cursor.execute("INSERT INTO workout_plans (name, created_by_user_id) VALUES (?, NULL)", (w_name,))
+                    w_id = cursor.lastrowid
+                    for ex_name, reps in w_exercises:
+                        cursor.execute("SELECT id FROM exercises WHERE name = ? LIMIT 1", (ex_name,))
+                        ex_row = cursor.fetchone()
+                        if ex_row:
+                            cursor.execute("""
+                                INSERT INTO id_exercises_id_workout (id_workout, id_exercise, reps)
+                                VALUES (?, ?, ?)
+                            """, (w_id, ex_row[0], reps))
+
+            conn.commit()
+            _db_initialized = True
+            logger.info("Database schema and default records initialized successfully.")
+    except sqlite3.Error as e:
+        logger.error("Database initialization error: %s", e)
+
 
 def _get_db_path() -> str:
-    """Return the absolute path to the application database."""
-    return resource_path("data/database.db")
+    """Return the absolute path to the application database, ensuring initialization."""
+    global _db_initialized
+    path = resource_path("data/database.db")
+    if not _db_initialized:
+        init_db(path)
+    return path
 
 
 # ── Authentication ─────────────────────────────────────────────────────────────

@@ -95,6 +95,17 @@ class Training(QWidget):
         self.session_start   = time.time()         # for JSON session log
         self.session_logger  = SessionLogger()
 
+        # ── Safe Attribute Defaults ───────────────────────────────────────────
+        self.cap = None
+        self.timer = None
+        self.pose = None
+        self.mp_pose = None
+        self.mp_draw = None
+        self.font = None
+        self.reps_effects = {}
+        self.sound_effects = {}
+        self.is_valid = False
+
         # ── UI wiring ──────────────────────────────────────────────────────────
         self.next_exercise_button.hide()
         self.next_exercise_button.clicked.connect(self._go_to_next_exercise)
@@ -102,7 +113,14 @@ class Training(QWidget):
         # ── Camera ────────────────────────────────────────────────────────────
         self.cap = self._initialize_camera(self.camera_name)
         if not self.cap or not self.cap.isOpened():
-            QMessageBox.critical(self, "Error", f"Failed to open camera: {self.camera_name}")
+            camera_label = f"'{self.camera_name}'" if self.camera_name else "default webcam"
+            QMessageBox.critical(
+                self,
+                "Camera Error",
+                f"Could not open camera ({camera_label}).\n\n"
+                "Please make sure a camera is connected and permitted, or use 'Demo Mode' "
+                "from the sidebar to analyze recorded videos without a webcam."
+            )
             return
 
         # ── Font ──────────────────────────────────────────────────────────────
@@ -115,22 +133,28 @@ class Training(QWidget):
             self.font = ImageFont.load_default()
 
         # ── MediaPipe Pose ────────────────────────────────────────────────────
-        self.mp_pose = mp.solutions.pose
-        self.pose = self.mp_pose.Pose(
-            static_image_mode=False, model_complexity=1,
-            enable_segmentation=False,
-            min_detection_confidence=_MIN_VISIBILITY,
-            min_tracking_confidence=_MIN_VISIBILITY,
-        )
-        self.mp_draw = mp.solutions.drawing_utils
+        try:
+            self.mp_pose = mp.solutions.pose
+            self.pose = self.mp_pose.Pose(
+                static_image_mode=False, model_complexity=1,
+                enable_segmentation=False,
+                min_detection_confidence=_MIN_VISIBILITY,
+                min_tracking_confidence=_MIN_VISIBILITY,
+            )
+            self.mp_draw = mp.solutions.drawing_utils
+        except Exception as e:
+            logger.error("Failed to initialize MediaPipe Pose: %s", e)
+            QMessageBox.critical(self, "Error", f"Failed to initialize pose detection: {e}")
+            return
 
         # ── Audio ─────────────────────────────────────────────────────────────
         self._init_sounds()
 
         # ── Frame timer ───────────────────────────────────────────────────────
-        self.timer = QTimer()
+        self.timer = QTimer(self)
         self.timer.timeout.connect(self._update_camera)
         self.timer.start(_CAMERA_TIMER_MS)
+        self.is_valid = True
 
     # ── Camera initialisation ──────────────────────────────────────────────────
 
@@ -145,9 +169,15 @@ class Training(QWidget):
                 set_setting(self.user, "camera", available[0].deviceName())
                 logger.warning("Saved camera not found. Falling back to index 0.")
             else:
-                logger.error("No cameras detected.")
-                return None
-        return cv2.VideoCapture(index, cv2.CAP_DSHOW)
+                logger.warning("No cameras detected by QCameraInfo. Attempting fallback to index 0.")
+                index = 0
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+        if not cap.isOpened():
+            cap = cv2.VideoCapture(index)
+        if not cap.isOpened():
+            logger.error("No camera could be opened at index %s.", index)
+            return None
+        return cap
 
     # ── Audio initialisation ───────────────────────────────────────────────────
 
@@ -715,17 +745,29 @@ class Training(QWidget):
     # ── Cleanup ────────────────────────────────────────────────────────────────
 
     def stop_all(self):
-        """Release camera, stop timer, close MediaPipe Pose."""
-        if self.cap:
-            if self.timer.isActive():
-                self.timer.stop()
-            if self.cap.isOpened():
-                self.cap.release()
+        """Release camera, stop timer, close MediaPipe Pose safely."""
+        timer = getattr(self, "timer", None)
+        if timer is not None and timer.isActive():
+            timer.stop()
+
+        cap = getattr(self, "cap", None)
+        if cap is not None:
+            if cap.isOpened():
+                cap.release()
             self.cap = None
-        if self.pose is not None:
-            self.pose.close()
+
+        pose = getattr(self, "pose", None)
+        if pose is not None:
+            try:
+                pose.close()
+            except Exception:
+                pass
             self.pose = None
-        cv2.destroyAllWindows()
+
+        try:
+            cv2.destroyAllWindows()
+        except Exception:
+            pass
 
     def closeEvent(self, event):
         self.stop_all()

@@ -72,15 +72,25 @@ class HomePage(QWidget):
 
     def _start_training(self):
         """Hide the plan preview and launch the training widget."""
+        user = self.main_window.current_userid
+        workout = self.list_workouts.currentText()
+
+        self.training_widget = Training(self, user, workout)
+        if not getattr(self.training_widget, "is_valid", False):
+            self.training_widget.stop_all()
+            self.training_widget.deleteLater()
+            self.training_widget = None
+            self.stackedWidget.hide()
+            self.list_workouts.show()
+            self.list_exercises.show()
+            self.start_button.show()
+            return
+
         self.list_workouts.hide()
         self.list_exercises.hide()
         self.start_button.hide()
 
-        user = self.main_window.current_userid
-        workout = self.list_workouts.currentText()
-
         self.stackedWidget.show()
-        self.training_widget = Training(self, user, workout)
         self.stackedWidget.addWidget(self.training_widget)
         self.stackedWidget.setCurrentWidget(self.training_widget)
 
@@ -98,3 +108,7 @@ class HomePage(QWidget):
             self.stackedWidget.removeWidget(self.training_widget)
             self.training_widget.deleteLater()
             self.training_widget = None
+            self.stackedWidget.hide()
+            self.list_workouts.show()
+            self.list_exercises.show()
+            self.start_button.show()
