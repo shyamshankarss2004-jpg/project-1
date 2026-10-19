@@ -373,7 +373,7 @@ if HAS_WEBRTC:
             if mp_pose is not None:
                 self.pose = mp_pose.Pose(
                     static_image_mode=False,
-                    model_complexity=0,
+                    model_complexity=1,
                     enable_segmentation=False,
                     min_detection_confidence=_MIN_VIS,
                     min_tracking_confidence=_MIN_VIS,
