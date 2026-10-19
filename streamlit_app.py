@@ -456,29 +456,24 @@ else:
     WorkoutVideoProcessor = None
 
 if HAS_WEBRTC:
-    RTC_CONFIGURATION = RTCConfiguration(
-        {
-            "iceServers": [
-                {"urls": ["stun:stun.l.google.com:19302"]},
-                {"urls": ["stun:openrelay.metered.ca:80"]},
-                {
-                    "urls": ["turn:openrelay.metered.ca:80"],
-                    "username": "openrelayproject",
-                    "credential": "openrelayproject",
-                },
-                {
-                    "urls": ["turn:openrelay.metered.ca:443"],
-                    "username": "openrelayproject",
-                    "credential": "openrelayproject",
-                },
-                {
-                    "urls": ["turn:openrelay.metered.ca:443?transport=tcp"],
-                    "username": "openrelayproject",
-                    "credential": "openrelayproject",
-                },
-            ]
-        }
-    )
+    _ice_servers = [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        {"urls": ["stun:stun1.l.google.com:19302"]},
+        {"urls": ["stun:stun2.l.google.com:19302"]},
+        {"urls": ["stun:stun3.l.google.com:19302"]},
+        {"urls": ["stun:stun4.l.google.com:19302"]},
+    ]
+    try:
+        if "TURN_URL" in st.secrets:
+            _ice_servers.append({
+                "urls": [st.secrets["TURN_URL"]],
+                "username": st.secrets.get("TURN_USERNAME", ""),
+                "credential": st.secrets.get("TURN_CREDENTIAL", ""),
+            })
+    except Exception:
+        pass
+
+    RTC_CONFIGURATION = RTCConfiguration({"iceServers": _ice_servers})
 else:
     RTC_CONFIGURATION = None
 
@@ -722,9 +717,10 @@ with left_col:
     if input_mode == "📸 Live Web Camera (Browser)":
         cam_submode = st.radio(
             "Camera Mode",
-            options=["🎥 Continuous Live Stream (WebRTC)", "📸 Instant Photo Snapshot"],
+            options=["📸 Instant Photo Snapshot (Fast & Reliable)", "🎥 Continuous Live Stream (WebRTC)"],
+            index=0,
             horizontal=True,
-            help="Choose Continuous Stream for 30 FPS video, or Instant Snapshot if your network blocks WebRTC P2P traffic."
+            help="Instant Photo Snapshot connects reliably through cloud firewalls. WebRTC streams 30 FPS video if your network supports direct P2P traffic."
         )
 
         if cam_submode == "🎥 Continuous Live Stream (WebRTC)":
@@ -769,9 +765,9 @@ with left_col:
                         st.session_state.running = False
             else:
                 st.warning("⚠️ `streamlit-webrtc` is not installed. Switching to Instant Photo Snapshot.")
-                cam_submode = "📸 Instant Photo Snapshot"
+                cam_submode = "📸 Instant Photo Snapshot (Fast & Reliable)"
 
-        if cam_submode == "📸 Instant Photo Snapshot":
+        if cam_submode.startswith("📸 Instant Photo Snapshot"):
             st.markdown(
                 """
                 <div style="background: rgba(88, 166, 255, 0.12); border: 1px solid #388bfd; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px;">
