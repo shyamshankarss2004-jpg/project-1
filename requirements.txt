@@ -3,14 +3,15 @@
 # ==============================================================================
 # Install with:  pip install -r requirements.txt
 
-PyQt5>=5.15.0; sys_platform == "win32"
-opencv-python>=4.8.0; sys_platform == "win32"
-opencv-python-headless>=4.8.0; sys_platform != "win32"
-Pillow>=10.0.0
+# Note: cv2 is provided by opencv-contrib-python (automatically installed by mediapipe).
+# Do not declare opencv-python-headless to prevent mutually exclusive package conflicts in uv.
+
 mediapipe==0.10.21
 numpy>=1.26.0,<2.0.0
 protobuf>=4.25.3,<5.0.0
-streamlit>=1.35.0,<=1.38.0          # Standalone demo UI (run: streamlit run streamlit_app.py)
+streamlit>=1.35.0,<=1.38.0
+Pillow>=10.0.0
+PyQt5>=5.15.0; sys_platform == "win32"
 
 # ------------------------------------------------------------------------------
 # Build tool (not required to run the application)
