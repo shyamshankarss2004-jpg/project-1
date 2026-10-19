@@ -18,6 +18,7 @@ import math
 import time
 import datetime
 import threading
+import base64
 
 import cv2
 import numpy as np
@@ -136,14 +137,14 @@ def check_camera_devices(force_refresh=False):
 
 # ── Session-state initialisation ───────────────────────────────────────────────
 _INPUT_OPTIONS = [
-    "📸 Live Web Camera (Browser)",
-    "💻 Local PC Camera (OpenCV)",
     "🎬 Sample Workout Video",
     "📁 Upload Workout Video",
+    "📸 Live Web Camera (Browser)",
+    "💻 Local PC Camera (OpenCV)",
 ]
 _IS_CLOUD = os.path.exists("/mount/src") or "STREAMLIT_SHARING_HOST" in os.environ
 _INITIAL_CAMS = check_camera_devices()
-_DEFAULT_INPUT = "📸 Live Web Camera (Browser)" if _IS_CLOUD else ("💻 Local PC Camera (OpenCV)" if _INITIAL_CAMS else "🎬 Sample Workout Video")
+_DEFAULT_INPUT = "🎬 Sample Workout Video" if _IS_CLOUD else ("💻 Local PC Camera (OpenCV)" if _INITIAL_CAMS else "🎬 Sample Workout Video")
 
 _DEFAULTS = {
     "running":        False,
@@ -458,10 +459,16 @@ else:
 if HAS_WEBRTC:
     _ice_servers = [
         {"urls": ["stun:stun.l.google.com:19302"]},
-        {"urls": ["stun:stun1.l.google.com:19302"]},
-        {"urls": ["stun:stun2.l.google.com:19302"]},
-        {"urls": ["stun:stun3.l.google.com:19302"]},
-        {"urls": ["stun:stun4.l.google.com:19302"]},
+        {"urls": ["stun:openrelay.metered.ca:80"]},
+        {
+            "urls": [
+                "turn:openrelay.metered.ca:80",
+                "turn:openrelay.metered.ca:443",
+                "turn:openrelay.metered.ca:443?transport=tcp",
+            ],
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
     ]
     try:
         if "TURN_URL" in st.secrets:
@@ -593,13 +600,9 @@ with st.sidebar:
         st.caption(f"📁 Source: `{os.path.basename(st.session_state.video_path)}`")
 
     elif input_mode == "📁 Upload Workout Video":
-        uploaded_file = st.file_uploader("Upload workout video (.mp4, .mov, .avi)", type=["mp4", "mov", "avi"])
-        if uploaded_file is not None:
-            tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-            tfile.write(uploaded_file.read())
-            tfile.flush()
-            st.session_state.video_path = tfile.name
-            st.success("✅ Video file ready for workout!")
+        st.info("📂 Upload your video in the center panel to begin analysis.")
+        if st.session_state.get("video_path") and os.path.exists(st.session_state.video_path):
+            st.caption(f"📁 Video ready: `{os.path.basename(st.session_state.video_path)}`")
 
     elif input_mode == "📸 Live Web Camera (Browser)":
         st.caption("📸 Your web camera opens directly in the center panel below.")
@@ -607,77 +610,72 @@ with st.sidebar:
     st.markdown("---")
     st.markdown('<p class="section-title">3. Session Controls</p>', unsafe_allow_html=True)
 
-    reset_clicked = False
-    if input_mode == "📸 Live Web Camera (Browser)":
-        if HAS_WEBRTC:
-            st.info("🎥 Continuous Live Web Camera is enabled! Press **START** on the video feed to begin continuous tracking.")
-            reset_clicked = st.button("⏹ Reset Workout Stats", use_container_width=True)
-            start_clicked = False
-            stop_clicked  = False
-        else:
-            st.info("👆 Look into your web camera and click **Take Photo** to evaluate posture!")
-            start_clicked = False
-            stop_clicked  = st.button("⏹ Reset Workout Stats", use_container_width=True)
-    else:
-        col_s, col_t = st.columns(2)
-        start_clicked = col_s.button("▶ Start", use_container_width=True, type="primary")
-        stop_clicked  = col_t.button("⏹ Stop",  use_container_width=True)
+    def _start_video_session(video_path: str):
+        if not video_path or not os.path.exists(video_path):
+            st.error("❌ Please select or upload a valid video file first.")
+            return False
+        if mp_pose is None or mp_draw is None:
+            st.error("❌ MediaPipe Pose is not available.")
+            return False
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            st.error(f"❌ Could not open video file: {os.path.basename(video_path)}")
+            return False
 
-    if start_clicked and not st.session_state.running:
-        cap = None
-        is_vid = False
+        st.session_state.cap = cap
+        st.session_state.is_video_file = True
+        st.session_state.mp_pose = mp_pose
+        st.session_state.mp_draw = mp_draw
+        st.session_state.pose = mp_pose.Pose(
+            static_image_mode=False,
+            model_complexity=1,
+            enable_segmentation=False,
+            min_detection_confidence=_MIN_VIS,
+            min_tracking_confidence=_MIN_VIS,
+        )
+        st.session_state.counter = 0
+        st.session_state.stage = None
+        st.session_state.start_time = time.time()
+        st.session_state.running = True
+        st.session_state.form_msg = "Video analysis running!"
+        st.session_state.form_ok = True
+        return True
 
-        if input_mode == "💻 Local PC Camera (OpenCV)":
-            cam_idx = st.session_state.get("selected_cam", 0)
-            if sys.platform == "win32":
-                cap = cv2.VideoCapture(cam_idx, cv2.CAP_DSHOW)
-                if not cap.isOpened():
-                    cap = cv2.VideoCapture(cam_idx)
-            else:
-                cap = cv2.VideoCapture(cam_idx)
-
+    def _start_cam_session(cam_idx: int = 0):
+        if mp_pose is None or mp_draw is None:
+            st.error("❌ MediaPipe Pose is not available.")
+            return False
+        if sys.platform == "win32":
+            cap = cv2.VideoCapture(cam_idx, cv2.CAP_DSHOW)
             if not cap.isOpened():
-                if _IS_CLOUD:
-                    st.error("❌ OpenCV camera not detected on cloud host. Please switch to '📸 Live Web Camera (Browser)' or '🎬 Sample Workout Video' above.")
-                else:
-                    st.error(f"❌ Camera #{cam_idx} could not be opened. Please verify it is connected and not in use by another app.")
-                cap = None
-        elif input_mode in ("🎬 Sample Workout Video", "📁 Upload Workout Video"):
-            vid_path = st.session_state.get("video_path")
-            if not vid_path or not os.path.exists(vid_path):
-                st.error("❌ Please choose or upload a valid video file first.")
-            else:
-                cap = cv2.VideoCapture(vid_path)
-                if not cap.isOpened():
-                    st.error(f"❌ Could not open video file: {os.path.basename(vid_path)}")
-                    cap = None
-                else:
-                    is_vid = True
+                cap = cv2.VideoCapture(cam_idx)
+        else:
+            cap = cv2.VideoCapture(cam_idx)
+        if not cap.isOpened():
+            st.error(f"❌ Camera #{cam_idx} could not be opened.")
+            return False
 
-        if cap is not None and cap.isOpened():
-            if mp_pose is None or mp_draw is None:
-                st.error("❌ MediaPipe Pose is not available. Please ensure mediapipe<=0.10.21 and numpy<2 are installed in the environment.")
-                cap.release()
-            else:
-                st.session_state.cap           = cap
-                st.session_state.is_video_file = is_vid
-                st.session_state.mp_pose       = mp_pose
-                st.session_state.mp_draw       = mp_draw
-                st.session_state.pose          = mp_pose.Pose(
-                    static_image_mode=False, model_complexity=1,
-                    enable_segmentation=False,
-                    min_detection_confidence=_MIN_VIS,
-                    min_tracking_confidence=_MIN_VIS,
-                )
-                st.session_state.counter      = 0
-                st.session_state.stage        = None
-                st.session_state.start_time   = time.time()
-                st.session_state.running      = True
-                st.session_state.form_msg     = "Workout tracking active!"
-                st.session_state.form_ok      = True
+        st.session_state.cap = cap
+        st.session_state.is_video_file = False
+        st.session_state.mp_pose = mp_pose
+        st.session_state.mp_draw = mp_draw
+        st.session_state.pose = mp_pose.Pose(
+            static_image_mode=False,
+            model_complexity=1,
+            enable_segmentation=False,
+            min_detection_confidence=_MIN_VIS,
+            min_tracking_confidence=_MIN_VIS,
+        )
+        st.session_state.counter = 0
+        st.session_state.stage = None
+        st.session_state.start_time = time.time()
+        st.session_state.running = True
+        st.session_state.form_msg = "Webcam tracking running!"
+        st.session_state.form_ok = True
+        return True
 
-    if stop_clicked and st.session_state.running:
-        if st.session_state.start_time:
+    def _stop_current_session():
+        if st.session_state.get("start_time"):
             try:
                 sl = SessionLogger()
                 sl.log_session(
@@ -686,16 +684,42 @@ with st.sidebar:
                     start_time=st.session_state.start_time,
                     end_time=time.time(),
                 )
-                st.sidebar.success("✅ Session saved to workout_logs/session_data.json")
-            except Exception as e:
-                st.sidebar.warning(f"Could not save session: {e}")
-        if st.session_state.cap:
-            st.session_state.cap.release()
-        if st.session_state.pose:
-            st.session_state.pose.close()
+                st.sidebar.success("✅ Workout session saved to logs!")
+            except Exception:
+                pass
+        if st.session_state.get("cap"):
+            try:
+                st.session_state.cap.release()
+            except Exception:
+                pass
+        if st.session_state.get("pose"):
+            try:
+                st.session_state.pose.close()
+            except Exception:
+                pass
         st.session_state.running = False
-        st.session_state.cap     = None
-        st.session_state.pose    = None
+        st.session_state.cap = None
+        st.session_state.pose = None
+
+    if input_mode == "📸 Live Web Camera (Browser)":
+        if st.button("⏹ Reset Workout Stats", use_container_width=True):
+            st.session_state.counter = 0
+            st.session_state.stage = None
+            st.session_state.form_msg = "Stats reset — ready!"
+            st.session_state.form_ok = True
+            st.rerun()
+    else:
+        col_s, col_t = st.columns(2)
+        if col_s.button("▶ Start", use_container_width=True, type="primary", disabled=st.session_state.running):
+            if input_mode == "💻 Local PC Camera (OpenCV)":
+                _start_cam_session(st.session_state.get("selected_cam", 0))
+            elif input_mode in ("🎬 Sample Workout Video", "📁 Upload Workout Video"):
+                _start_video_session(st.session_state.get("video_path"))
+            st.rerun()
+
+        if col_t.button("⏹ Stop", use_container_width=True, disabled=not st.session_state.running):
+            _stop_current_session()
+            st.rerun()
 
     st.markdown("---")
     st.caption("Powered by MediaPipe BlazePose · OpenCV · Streamlit")
@@ -712,68 +736,123 @@ left_col, right_col = st.columns([2, 1], gap="large")
 # ── Left: Camera / Video feed ──────────────────────────────────────────────────
 with left_col:
     st.markdown('<p class="section-title">📷 Workout Feed</p>', unsafe_allow_html=True)
-    frame_placeholder = st.empty()
 
-    if input_mode == "📸 Live Web Camera (Browser)":
-        cam_submode = st.radio(
-            "Camera Mode",
-            options=["📸 Instant Photo Snapshot (Fast & Reliable)", "🎥 Continuous Live Stream (WebRTC)"],
-            index=0,
-            horizontal=True,
-            help="Instant Photo Snapshot connects reliably through cloud firewalls. WebRTC streams 30 FPS video if your network supports direct P2P traffic."
+    if input_mode == "🎬 Sample Workout Video":
+        sample_dict = {
+            "Squats Demo Video": os.path.join(BASE_DIR, "demo", "How-to-do-SnapYT.App.mp4"),
+            "Squats Demo Video #2": os.path.join(BASE_DIR, "demo", "How-to-do-SnapYT.App (1).mp4"),
+            "Pull-up Demo Video": os.path.join(BASE_DIR, "demo", "Pullup-Exercise-SnapYT.App.mp4"),
+        }
+        chosen_sample = st.selectbox("Choose Sample Video", options=list(sample_dict.keys()), key="main_sample_sel")
+        st.session_state.video_path = sample_dict[chosen_sample]
+
+        if not st.session_state.running:
+            col_v1, col_v2 = st.columns(2)
+            if col_v1.button("▶ Play Sample Video", type="primary", use_container_width=True):
+                _start_video_session(sample_dict[chosen_sample])
+                st.rerun()
+            if col_v2.button("⏹ Stop Video", use_container_width=True, disabled=True):
+                pass
+        else:
+            if st.button("⏹ Stop Workout Video", type="secondary", use_container_width=True):
+                _stop_current_session()
+                st.rerun()
+
+    elif input_mode == "📁 Upload Workout Video":
+        uploaded_file = st.file_uploader(
+            "📂 Upload an exercise video (.mp4, .mov, .avi)",
+            type=["mp4", "mov", "avi"],
+            key="center_file_uploader",
         )
+        if uploaded_file is not None:
+            if st.session_state.get("_last_uploaded_name") != uploaded_file.name:
+                tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                tfile.write(uploaded_file.read())
+                tfile.flush()
+                st.session_state.video_path = tfile.name
+                st.session_state._last_uploaded_name = uploaded_file.name
+                st.success(f"✅ Video ready: **{uploaded_file.name}**")
+            else:
+                st.caption(f"📁 Active video: `{uploaded_file.name}`")
 
-        if cam_submode == "🎥 Continuous Live Stream (WebRTC)":
-            if HAS_WEBRTC:
+        has_file = bool(st.session_state.get("video_path") and os.path.exists(st.session_state.video_path))
+        if not has_file:
+            st.info("👆 Please select and upload an exercise video file above to begin AI analysis.")
+        elif not st.session_state.running:
+            col_v1, col_v2 = st.columns(2)
+            if col_v1.button("▶ Start Video Analysis", type="primary", use_container_width=True):
+                _start_video_session(st.session_state.video_path)
+                st.rerun()
+            if col_v2.button("⏹ Stop Video", use_container_width=True, disabled=True):
+                pass
+        else:
+            if st.button("⏹ Stop Video Analysis", type="secondary", use_container_width=True):
+                _stop_current_session()
+                st.rerun()
+
+    elif input_mode == "💻 Local PC Camera (OpenCV)":
+        if not st.session_state.running:
+            col_v1, col_v2 = st.columns(2)
+            if col_v1.button("▶ Start Webcam", type="primary", use_container_width=True):
+                _start_cam_session(st.session_state.get("selected_cam", 0))
+                st.rerun()
+            if col_v2.button("⏹ Stop Webcam", use_container_width=True, disabled=True):
+                pass
+        else:
+            if st.button("⏹ Stop Webcam", type="secondary", use_container_width=True):
+                _stop_current_session()
+                st.rerun()
+
+    elif input_mode == "📸 Live Web Camera (Browser)":
+        cam_view_mode = st.radio(
+            "Browser Camera Mode",
+            options=["🎥 Continuous Live WebRTC Stream", "📸 Instant Photo Snapshot"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        if cam_view_mode == "🎥 Continuous Live WebRTC Stream":
+            if not HAS_WEBRTC:
+                st.error("❌ WebRTC streamer is unavailable in this environment.")
+            else:
                 st.markdown(
                     """
                     <div style="background: rgba(46, 160, 67, 0.12); border: 1px solid #2ea043; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px;">
-                        <div style="color: #3fb950; font-weight: 700; font-size: 0.95rem;">🎥 Continuous Live Stream Active</div>
+                        <div style="color: #3fb950; font-weight: 700; font-size: 0.95rem;">🎥 Continuous Live WebRTC Stream</div>
                         <div style="color: #c9d1d9; font-size: 0.82rem; margin-top: 3px;">
-                            Click <b>START</b> on the camera feed below to stream at 30 FPS with real-time pose tracking.
-                            <i>(If connecting hangs due to network firewall, switch to <b>Instant Photo Snapshot</b> above!)</i>
+                            Click <b>START</b> on the camera feed below to stream your webcam continuously with real-time pose tracking HUD.
                         </div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
                 webrtc_ctx = webrtc_streamer(
-                    key="continuous-workout-streamer",
+                    key="live-workout-streamer",
                     mode=WebRtcMode.SENDRECV,
                     rtc_configuration=RTC_CONFIGURATION,
                     video_processor_factory=WorkoutVideoProcessor,
                     media_stream_constraints={
-                        "video": {"width": {"ideal": 640}, "height": {"ideal": 480}},
+                        "video": {"width": {"ideal": 640}, "height": {"ideal": 480}, "frameRate": {"ideal": 25}},
                         "audio": False,
                     },
                     async_processing=True,
                 )
-                if webrtc_ctx.video_processor:
+                if webrtc_ctx and webrtc_ctx.video_processor:
                     webrtc_ctx.video_processor.update_exercise(st.session_state.exercise)
-                    if reset_clicked:
-                        webrtc_ctx.video_processor.reset()
                     with webrtc_ctx.video_processor.lock:
-                        st.session_state.counter  = webrtc_ctx.video_processor.counter
+                        st.session_state.counter = webrtc_ctx.video_processor.counter
                         st.session_state.form_msg = webrtc_ctx.video_processor.form_msg
-                        st.session_state.form_ok  = webrtc_ctx.video_processor.form_ok
-                        webrtc_start              = webrtc_ctx.video_processor.start_time
+                        st.session_state.form_ok = webrtc_ctx.video_processor.form_ok
+                        if st.session_state.start_time is None and webrtc_ctx.state.playing:
+                            st.session_state.start_time = webrtc_ctx.video_processor.start_time
 
-                    if webrtc_ctx.state.playing and not st.session_state.running:
-                        st.session_state.running = True
-                        st.session_state.start_time = webrtc_start
-                    elif not webrtc_ctx.state.playing and st.session_state.running:
-                        st.session_state.running = False
-            else:
-                st.warning("⚠️ `streamlit-webrtc` is not installed. Switching to Instant Photo Snapshot.")
-                cam_submode = "📸 Instant Photo Snapshot (Fast & Reliable)"
-
-        if cam_submode.startswith("📸 Instant Photo Snapshot"):
+                st.caption("💡 *If your browser asks for camera permission, click **Allow**. If connection takes long on your network, switch to **Instant Photo Snapshot** above.*")
+        else:
             st.markdown(
                 """
                 <div style="background: rgba(88, 166, 255, 0.12); border: 1px solid #388bfd; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px;">
-                    <div style="color: #58a6ff; font-weight: 700; font-size: 0.95rem;">📸 100% Reliable Instant Photo Mode</div>
+                    <div style="color: #58a6ff; font-weight: 700; font-size: 0.95rem;">📸 Instant Camera Snapshot</div>
                     <div style="color: #c9d1d9; font-size: 0.82rem; margin-top: 3px;">
-                        Bypasses all network firewalls and WebRTC restrictions. Look into the camera and click <b>Take Photo</b> to analyze form!
+                        Capture posture photos directly with your webcam for instant AI form analysis.
                     </div>
                 </div>
                 """,
@@ -785,9 +864,7 @@ with left_col:
                 cv2_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
                 if cv2_img is not None:
                     if st.session_state.pose is None:
-                        if mp_pose is None or mp_draw is None:
-                            st.error("❌ MediaPipe Pose is not available.")
-                        else:
+                        if mp_pose is not None and mp_draw is not None:
                             st.session_state.mp_pose = mp_pose
                             st.session_state.mp_draw = mp_draw
                             st.session_state.pose = mp_pose.Pose(
@@ -796,80 +873,82 @@ with left_col:
                                 min_detection_confidence=_MIN_VIS,
                             )
                     annotated = _process_frame(cv2_img, st.session_state.exercise)
-                    st.image(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB), caption="Analyzed Pose & Form Feedback", use_column_width=True)
-                    _render_stats()
-    elif not st.session_state.running:
-        if input_mode == "💻 Local PC Camera (OpenCV)":
-            frame_placeholder.info("Local webcam feed is inactive. Verify camera connection in sidebar and press **▶ Start**.")
-        elif input_mode in ("🎬 Sample Workout Video", "📁 Upload Workout Video"):
-            frame_placeholder.info(f"Ready to play **{input_mode}**. Press **▶ Start** in the sidebar to begin AI analysis.")
+                    st.image(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB), caption="Analyzed Pose & Form Feedback", use_container_width=True)
 
-# ── Right: Stats panel ─────────────────────────────────────────────────────────
-with right_col:
-    st.markdown('<p class="section-title">📊 Live Workout Stats</p>', unsafe_allow_html=True)
+    # ── Render active video stream fragment ──
+    @st.fragment(run_every=0.04)
+    def _render_video_feed():
+        if not st.session_state.get("running", False):
+            return
 
-    exercise_placeholder = st.empty()
-    reps_placeholder     = st.empty()
-    form_placeholder     = st.empty()
+        cap = st.session_state.get("cap")
+        if cap is None or not cap.isOpened():
+            st.session_state.running = False
+            return
 
-    st.markdown("---")
-    st.markdown('<p class="section-title">⏱️ Session Info</p>', unsafe_allow_html=True)
-
-    time_placeholder  = st.empty()
-    total_placeholder = st.empty()
-
-
-def _render_stats():
-    """Refresh the right-column stats widgets."""
-    exercise_placeholder.metric("Exercise", st.session_state.exercise)
-    reps_placeholder.metric("Reps Completed", st.session_state.counter)
-
-    fb_class   = "feedback-good" if st.session_state.form_ok else "feedback-bad"
-    fb_icon    = "✅" if st.session_state.form_ok else "⚠️"
-    form_placeholder.markdown(
-        f'<div class="{fb_class}">{fb_icon} {st.session_state.form_msg}</div>',
-        unsafe_allow_html=True,
-    )
-
-    if st.session_state.start_time:
-        elapsed = int(time.time() - st.session_state.start_time)
-        mins, secs = divmod(elapsed, 60)
-        time_placeholder.metric("Workout Time", f"{mins:02d}:{secs:02d}")
-    else:
-        time_placeholder.metric("Workout Time", "00:00")
-
-    total_placeholder.metric("Total Reps", st.session_state.counter)
-
-
-_render_stats()
-
-
-# ── Live frame loop ────────────────────────────────────────────────────────────
-if st.session_state.running and input_mode != "📸 Live Web Camera (Browser)":
-    cap = st.session_state.cap
-    if cap is None or not cap.isOpened():
-        st.error("❌ Video source disconnected. Please restart the workout.")
-        st.session_state.running = False
-    else:
         ret, frame = cap.read()
         if not ret:
             if st.session_state.get("is_video_file", False):
-                # Loop video seamlessly from the beginning
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 ret, frame = cap.read()
+                if not ret:
+                    st.session_state.running = False
+                    return
             else:
-                st.warning("⚠️ Could not read camera frame. Check your webcam connection.")
-        if ret and frame is not None:
-            if not st.session_state.get("is_video_file", False):
-                frame = cv2.flip(frame, 1)
-            try:
-                frame = _process_frame(frame, st.session_state.exercise)
-            except Exception as exc:
-                _put_text(frame, f"Error: {exc}", (10, 30), (0, 0, 220))
+                st.session_state.running = False
+                return
 
+        if not st.session_state.get("is_video_file", False):
+            frame = cv2.flip(frame, 1)
+
+        try:
+            frame = _process_frame(frame, st.session_state.exercise)
+        except Exception as exc:
+            _put_text(frame, f"Error: {exc}", (10, 30), (0, 0, 220))
+
+        # Encode frame to JPEG and render as base64 data URI to prevent Streamlit MediaFile 404s
+        ret_enc, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        if ret_enc:
+            b64_frame = base64.b64encode(buf).decode('utf-8')
+            st.markdown(
+                f'<div style="width:100%; text-align:center;"><img src="data:image/jpeg;base64,{b64_frame}" style="width:100%; border-radius:8px; border:1px solid #30363d;" /></div>',
+                unsafe_allow_html=True,
+            )
+        else:
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_placeholder.image(frame_rgb, channels="RGB", use_column_width=True)
+            st.image(frame_rgb, use_container_width=True)
 
-        _render_stats()
-        time.sleep(0.03)      # ~30 fps cap
-        st.rerun()
+    if input_mode != "📸 Live Web Camera (Browser)":
+        if st.session_state.running:
+            _render_video_feed()
+        else:
+            st.info("👆 Click **▶ Start** above to begin workout analysis!")
+
+
+# ── Right: Stats panel ─────────────────────────────────────────────────────────
+with right_col:
+    @st.fragment(run_every=0.5)
+    def _render_live_stats():
+        st.markdown('<p class="section-title">📊 Live Workout Stats</p>', unsafe_allow_html=True)
+        st.metric("Exercise", st.session_state.exercise)
+        st.metric("Reps Completed", st.session_state.counter)
+
+        fb_class = "feedback-good" if st.session_state.form_ok else "feedback-bad"
+        fb_icon  = "✅" if st.session_state.form_ok else "⚠️"
+        st.markdown(
+            f'<div class="{fb_class}">{fb_icon} {st.session_state.form_msg}</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("---")
+        st.markdown('<p class="section-title">⏱️ Session Info</p>', unsafe_allow_html=True)
+        if st.session_state.start_time:
+            elapsed = int(time.time() - st.session_state.start_time)
+            mins, secs = divmod(elapsed, 60)
+            st.metric("Workout Time", f"{mins:02d}:{secs:02d}")
+        else:
+            st.metric("Workout Time", "00:00")
+
+        st.metric("Total Reps", st.session_state.counter)
+
+    _render_live_stats()
