@@ -373,7 +373,7 @@ if HAS_WEBRTC:
             if mp_pose is not None:
                 self.pose = mp_pose.Pose(
                     static_image_mode=False,
-                    model_complexity=1,
+                    model_complexity=0,
                     enable_segmentation=False,
                     min_detection_confidence=_MIN_VIS,
                     min_tracking_confidence=_MIN_VIS,
@@ -402,6 +402,12 @@ if HAS_WEBRTC:
             img = frame.to_ndarray(format="bgr24")
             # Natural mirror flip
             img = cv2.flip(img, 1)
+
+            # Downscale frame if larger than 640px to ensure smooth 30 FPS inference
+            fh, fw = img.shape[:2]
+            if fw > 640:
+                scale = 640.0 / fw
+                img = cv2.resize(img, (640, int(fh * scale)))
 
             if self.pose is None or mp_pose is None or mp_draw is None:
                 _put_text(img, "MediaPipe not available", (30, 80), (0, 0, 255))
@@ -831,7 +837,7 @@ with left_col:
                     rtc_configuration=RTC_CONFIGURATION,
                     video_processor_factory=WorkoutVideoProcessor,
                     media_stream_constraints={
-                        "video": {"width": {"ideal": 640}, "height": {"ideal": 480}, "frameRate": {"ideal": 25}},
+                        "video": True,
                         "audio": False,
                     },
                     async_processing=True,
