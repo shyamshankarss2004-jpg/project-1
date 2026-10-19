@@ -23,6 +23,17 @@ import numpy as np
 import mediapipe as mp
 import streamlit as st
 
+try:
+    import mediapipe.python.solutions.pose as mp_pose
+    import mediapipe.python.solutions.drawing_utils as mp_draw
+except Exception:
+    try:
+        mp_pose = mp.solutions.pose
+        mp_draw = mp.solutions.drawing_utils
+    except Exception:
+        mp_pose = None
+        mp_draw = None
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 from modules.posture_analyzer import (
@@ -520,22 +531,26 @@ with st.sidebar:
                     is_vid = True
 
         if cap is not None and cap.isOpened():
-            st.session_state.cap           = cap
-            st.session_state.is_video_file = is_vid
-            st.session_state.mp_pose      = mp.solutions.pose
-            st.session_state.mp_draw      = mp.solutions.drawing_utils
-            st.session_state.pose         = mp.solutions.pose.Pose(
-                static_image_mode=False, model_complexity=1,
-                enable_segmentation=False,
-                min_detection_confidence=_MIN_VIS,
-                min_tracking_confidence=_MIN_VIS,
-            )
-            st.session_state.counter      = 0
-            st.session_state.stage        = None
-            st.session_state.start_time   = time.time()
-            st.session_state.running      = True
-            st.session_state.form_msg     = "Workout tracking active!"
-            st.session_state.form_ok      = True
+            if mp_pose is None or mp_draw is None:
+                st.error("❌ MediaPipe Pose is not available. Please ensure mediapipe<=0.10.21 and numpy<2 are installed in the environment.")
+                cap.release()
+            else:
+                st.session_state.cap           = cap
+                st.session_state.is_video_file = is_vid
+                st.session_state.mp_pose       = mp_pose
+                st.session_state.mp_draw       = mp_draw
+                st.session_state.pose          = mp_pose.Pose(
+                    static_image_mode=False, model_complexity=1,
+                    enable_segmentation=False,
+                    min_detection_confidence=_MIN_VIS,
+                    min_tracking_confidence=_MIN_VIS,
+                )
+                st.session_state.counter      = 0
+                st.session_state.stage        = None
+                st.session_state.start_time   = time.time()
+                st.session_state.running      = True
+                st.session_state.form_msg     = "Workout tracking active!"
+                st.session_state.form_ok      = True
 
     if stop_clicked and st.session_state.running:
         if st.session_state.start_time:
@@ -582,13 +597,16 @@ with left_col:
             cv2_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
             if cv2_img is not None:
                 if st.session_state.pose is None:
-                    st.session_state.mp_pose = mp.solutions.pose
-                    st.session_state.mp_draw = mp.solutions.drawing_utils
-                    st.session_state.pose = mp.solutions.pose.Pose(
-                        static_image_mode=True, model_complexity=1,
-                        enable_segmentation=False,
-                        min_detection_confidence=_MIN_VIS,
-                    )
+                    if mp_pose is None or mp_draw is None:
+                        st.error("❌ MediaPipe Pose is not available.")
+                    else:
+                        st.session_state.mp_pose = mp_pose
+                        st.session_state.mp_draw = mp_draw
+                        st.session_state.pose = mp_pose.Pose(
+                            static_image_mode=True, model_complexity=1,
+                            enable_segmentation=False,
+                            min_detection_confidence=_MIN_VIS,
+                        )
                 annotated = _process_frame(cv2_img, st.session_state.exercise)
                 st.image(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB), caption="Analyzed Pose", use_column_width=True)
     elif not st.session_state.running:

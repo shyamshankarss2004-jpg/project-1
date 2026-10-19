@@ -7,8 +7,8 @@ PyQt5>=5.15.0; sys_platform == "win32"
 opencv-python>=4.8.0; sys_platform == "win32"
 opencv-python-headless>=4.8.0; sys_platform != "win32"
 Pillow>=10.0.0
-mediapipe>=0.10.13
-numpy>=1.24.0
+mediapipe==0.10.14
+numpy>=1.24.3,<2.0.0
 streamlit>=1.32.0          # Standalone demo UI (run: streamlit run streamlit_app.py)
 
 # ------------------------------------------------------------------------------
