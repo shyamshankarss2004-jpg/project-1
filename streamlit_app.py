@@ -122,9 +122,15 @@ def check_camera_devices(force_refresh=False):
 
 
 # ── Session-state initialisation ───────────────────────────────────────────────
+_INPUT_OPTIONS = [
+    "📸 Live Web Camera (Browser)",
+    "💻 Local PC Camera (OpenCV)",
+    "🎬 Sample Workout Video",
+    "📁 Upload Workout Video",
+]
 _IS_CLOUD = os.path.exists("/mount/src") or "STREAMLIT_SHARING_HOST" in os.environ
 _INITIAL_CAMS = check_camera_devices()
-_DEFAULT_INPUT = "Live Webcam" if _INITIAL_CAMS else "Sample Video"
+_DEFAULT_INPUT = "📸 Live Web Camera (Browser)" if _IS_CLOUD else ("💻 Local PC Camera (OpenCV)" if _INITIAL_CAMS else "🎬 Sample Workout Video")
 
 _DEFAULTS = {
     "running":        False,
@@ -389,8 +395,8 @@ with st.sidebar:
     st.markdown('<p class="section-title">2. Video Input Source</p>', unsafe_allow_html=True)
     input_mode = st.radio(
         "Choose Input Source",
-        options=["Live Webcam", "Sample Video", "Upload Video", "Camera Snapshot"],
-        index=["Live Webcam", "Sample Video", "Upload Video", "Camera Snapshot"].index(st.session_state.get("input_mode", _DEFAULT_INPUT)),
+        options=_INPUT_OPTIONS,
+        index=_INPUT_OPTIONS.index(st.session_state.get("input_mode", _DEFAULT_INPUT)) if st.session_state.get("input_mode", _DEFAULT_INPUT) in _INPUT_OPTIONS else 0,
         label_visibility="collapsed",
     )
     st.session_state.input_mode = input_mode
@@ -405,7 +411,7 @@ with st.sidebar:
             st.markdown(
                 f"""
                 <div style="background: rgba(46, 160, 67, 0.15); border: 1px solid #2ea043; border-radius: 8px; padding: 10px; margin-top: 6px; margin-bottom: 8px;">
-                    <div style="color: #3fb950; font-weight: 700; font-size: 0.92rem;">🟢 Camera Connected</div>
+                    <div style="color: #3fb950; font-weight: 700; font-size: 0.92rem;">🟢 Local Camera Detected</div>
                     <div style="color: #8b949e; font-size: 0.78rem; margin-top: 3px;">{cam_info}</div>
                 </div>
                 """,
@@ -415,9 +421,9 @@ with st.sidebar:
             env_label = "Streamlit Cloud Container" if _IS_CLOUD else "Local Host"
             st.markdown(
                 f"""
-                <div style="background: rgba(248, 81, 73, 0.15); border: 1px solid #f85149; border-radius: 8px; padding: 10px; margin-top: 6px; margin-bottom: 8px;">
-                    <div style="color: #f85149; font-weight: 700; font-size: 0.92rem;">🔴 Camera Not Connected</div>
-                    <div style="color: #8b949e; font-size: 0.78rem; margin-top: 3px;">No hardware camera found on {env_label}.</div>
+                <div style="background: rgba(88, 166, 255, 0.12); border: 1px solid #388bfd; border-radius: 8px; padding: 10px; margin-top: 6px; margin-bottom: 8px;">
+                    <div style="color: #58a6ff; font-weight: 700; font-size: 0.92rem;">🌐 Browser Web Camera Ready</div>
+                    <div style="color: #8b949e; font-size: 0.78rem; margin-top: 3px;">Live webcam ready via browser ({env_label}).</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -437,15 +443,10 @@ with st.sidebar:
         else:
             if _IS_CLOUD:
                 st.info(
-                    "🌐 **Why does it show 'Camera Not Connected' in Cloud?**\n\n"
-                    "Streamlit Cloud runs inside a remote Linux container in a data center without physical USB webcam hardware.\n\n"
-                    "👉 **To test right now on Streamlit Cloud:**\n"
-                    "- Switch to **'🎬 Sample Video'** or **'📁 Upload Video'** above to see live skeleton tracking and rep counting.\n"
-                    "- Or switch to **'📸 Camera Snapshot'** to test single-frame analysis with your browser webcam.\n\n"
-                    "👉 **To use continuous live webcam:**\n"
-                    "- Run the project on your laptop terminal:\n"
-                    "```bash\nstreamlit run streamlit_app.py\n```\n"
-                    "- Your local webcam will be automatically detected (🟢 Connected) and streamed live!"
+                    "🌐 **How Camera Works in Cloud vs Local:**\n\n"
+                    "1. **Live in Browser (Cloud):** Select **'📸 Live Web Camera (Browser)'** to open your webcam directly inside the webpage.\n\n"
+                    "2. **Pre-recorded Video:** Select **'🎬 Sample Workout Video'** or **'📁 Upload Workout Video'** to test exercise counting.\n\n"
+                    "3. **Continuous OpenCV Stream:** Run locally on your laptop: `streamlit run streamlit_app.py`"
                 )
             else:
                 st.warning(
@@ -455,7 +456,7 @@ with st.sidebar:
                     "- Click the 🔄 button above to re-scan."
                 )
 
-    if input_mode == "Live Webcam":
+    if input_mode == "💻 Local PC Camera (OpenCV)":
         if cams:
             cam_indices = [c["index"] for c in cams]
             selected_cam = st.selectbox(
@@ -466,11 +467,11 @@ with st.sidebar:
             st.session_state.selected_cam = selected_cam
         else:
             if _IS_CLOUD:
-                st.warning("⚠️ Live Webcam via OpenCV requires running locally. In Cloud, switch to '🎬 Sample Video' or '📁 Upload Video' above.")
+                st.warning("⚠️ Local OpenCV camera requires running locally. In Cloud, use '📸 Live Web Camera (Browser)' or '🎬 Sample Workout Video' above.")
             else:
                 st.warning("⚠️ No camera detected. Plug in a webcam and click 🔄 above.")
 
-    elif input_mode == "Sample Video":
+    elif input_mode == "🎬 Sample Workout Video":
         sample_dict = {
             "Squats Demo Video": os.path.join(BASE_DIR, "demo", "How-to-do-SnapYT.App.mp4"),
             "Squats Demo Video #2": os.path.join(BASE_DIR, "demo", "How-to-do-SnapYT.App (1).mp4"),
@@ -480,7 +481,7 @@ with st.sidebar:
         st.session_state.video_path = sample_dict[chosen_sample_name]
         st.caption(f"📁 Source: `{os.path.basename(st.session_state.video_path)}`")
 
-    elif input_mode == "Upload Video":
+    elif input_mode == "📁 Upload Workout Video":
         uploaded_file = st.file_uploader("Upload workout video (.mp4, .mov, .avi)", type=["mp4", "mov", "avi"])
         if uploaded_file is not None:
             tfile = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
@@ -489,21 +490,26 @@ with st.sidebar:
             st.session_state.video_path = tfile.name
             st.success("✅ Video file ready for workout!")
 
-    elif input_mode == "Camera Snapshot":
-        st.caption("📸 Capture frames directly through your browser webcam below.")
+    elif input_mode == "📸 Live Web Camera (Browser)":
+        st.caption("📸 Your web camera opens directly in the center panel below.")
 
     st.markdown("---")
     st.markdown('<p class="section-title">3. Session Controls</p>', unsafe_allow_html=True)
 
-    col_s, col_t = st.columns(2)
-    start_clicked = col_s.button("▶ Start", use_container_width=True, type="primary")
-    stop_clicked  = col_t.button("⏹ Stop",  use_container_width=True)
+    if input_mode == "📸 Live Web Camera (Browser)":
+        st.info("👆 Look into your web camera in the center panel and click **Take Photo** to evaluate posture!")
+        start_clicked = False
+        stop_clicked = st.button("⏹ Reset Workout Stats", use_container_width=True)
+    else:
+        col_s, col_t = st.columns(2)
+        start_clicked = col_s.button("▶ Start", use_container_width=True, type="primary")
+        stop_clicked  = col_t.button("⏹ Stop",  use_container_width=True)
 
     if start_clicked and not st.session_state.running:
         cap = None
         is_vid = False
 
-        if input_mode == "Live Webcam":
+        if input_mode == "💻 Local PC Camera (OpenCV)":
             cam_idx = st.session_state.get("selected_cam", 0)
             if sys.platform == "win32":
                 cap = cv2.VideoCapture(cam_idx, cv2.CAP_DSHOW)
@@ -514,11 +520,11 @@ with st.sidebar:
 
             if not cap.isOpened():
                 if _IS_CLOUD:
-                    st.error("❌ Camera not detected on cloud host. Please switch to '🎬 Sample Video' or '📁 Upload Video' above to run the AI tracker on Streamlit Cloud.")
+                    st.error("❌ OpenCV camera not detected on cloud host. Please switch to '📸 Live Web Camera (Browser)' or '🎬 Sample Workout Video' above.")
                 else:
                     st.error(f"❌ Camera #{cam_idx} could not be opened. Please verify it is connected and not in use by another app.")
                 cap = None
-        elif input_mode in ("Sample Video", "Upload Video"):
+        elif input_mode in ("🎬 Sample Workout Video", "📁 Upload Workout Video"):
             vid_path = st.session_state.get("video_path")
             if not vid_path or not os.path.exists(vid_path):
                 st.error("❌ Please choose or upload a valid video file first.")
@@ -590,8 +596,19 @@ with left_col:
     st.markdown('<p class="section-title">📷 Workout Feed</p>', unsafe_allow_html=True)
     frame_placeholder = st.empty()
 
-    if input_mode == "Camera Snapshot":
-        camera_photo = st.camera_input("Take a snapshot with your browser camera to evaluate form")
+    if input_mode == "📸 Live Web Camera (Browser)":
+        st.markdown(
+            """
+            <div style="background: rgba(88, 166, 255, 0.12); border: 1px solid #388bfd; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                <div style="color: #58a6ff; font-weight: 700; font-size: 1rem;">📷 Live Web Camera Feed</div>
+                <div style="color: #c9d1d9; font-size: 0.85rem; margin-top: 4px;">
+                    Your web camera opens directly below. Look into the camera and click <b>Take Photo</b> to analyze your posture and count reps in real time!
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        camera_photo = st.camera_input("Live Web Camera", label_visibility="collapsed")
         if camera_photo is not None:
             bytes_data = camera_photo.getvalue()
             cv2_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
@@ -608,11 +625,12 @@ with left_col:
                             min_detection_confidence=_MIN_VIS,
                         )
                 annotated = _process_frame(cv2_img, st.session_state.exercise)
-                st.image(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB), caption="Analyzed Pose", use_column_width=True)
+                st.image(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB), caption="Analyzed Pose & Form Feedback", use_column_width=True)
+                _render_stats()
     elif not st.session_state.running:
-        if input_mode == "Live Webcam":
-            frame_placeholder.info("Webcam feed is inactive. Verify camera connection in sidebar and press **▶ Start**.")
-        elif input_mode in ("Sample Video", "Upload Video"):
+        if input_mode == "💻 Local PC Camera (OpenCV)":
+            frame_placeholder.info("Local webcam feed is inactive. Verify camera connection in sidebar and press **▶ Start**.")
+        elif input_mode in ("🎬 Sample Workout Video", "📁 Upload Workout Video"):
             frame_placeholder.info(f"Ready to play **{input_mode}**. Press **▶ Start** in the sidebar to begin AI analysis.")
 
 # ── Right: Stats panel ─────────────────────────────────────────────────────────
@@ -656,7 +674,7 @@ _render_stats()
 
 
 # ── Live frame loop ────────────────────────────────────────────────────────────
-if st.session_state.running and input_mode != "Camera Snapshot":
+if st.session_state.running and input_mode != "📸 Live Web Camera (Browser)":
     cap = st.session_state.cap
     if cap is None or not cap.isOpened():
         st.error("❌ Video source disconnected. Please restart the workout.")
