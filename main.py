@@ -10,6 +10,13 @@ and starts the Qt event loop.
 
 import sys
 
+# On Windows, mediapipe and cv2 must be imported before PyQt5 to prevent C++ DLL initialization collision
+try:
+    import cv2
+    import mediapipe
+except Exception:
+    pass
+
 from PyQt5.QtWidgets import QApplication, QMainWindow, QStackedWidget
 
 from config import APP_TITLE, MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT

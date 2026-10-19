@@ -455,6 +455,33 @@ if HAS_WEBRTC:
 else:
     WorkoutVideoProcessor = None
 
+if HAS_WEBRTC:
+    RTC_CONFIGURATION = RTCConfiguration(
+        {
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:openrelay.metered.ca:80"]},
+                {
+                    "urls": ["turn:openrelay.metered.ca:80"],
+                    "username": "openrelayproject",
+                    "credential": "openrelayproject",
+                },
+                {
+                    "urls": ["turn:openrelay.metered.ca:443"],
+                    "username": "openrelayproject",
+                    "credential": "openrelayproject",
+                },
+                {
+                    "urls": ["turn:openrelay.metered.ca:443?transport=tcp"],
+                    "username": "openrelayproject",
+                    "credential": "openrelayproject",
+                },
+            ]
+        }
+    )
+else:
+    RTC_CONFIGURATION = None
+
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 
@@ -693,51 +720,64 @@ with left_col:
     frame_placeholder = st.empty()
 
     if input_mode == "📸 Live Web Camera (Browser)":
-        if HAS_WEBRTC:
-            st.markdown(
-                """
-                <div style="background: rgba(46, 160, 67, 0.12); border: 1px solid #2ea043; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-                    <div style="color: #3fb950; font-weight: 700; font-size: 1rem;">🎥 Continuous Live Web Camera Stream</div>
-                    <div style="color: #c9d1d9; font-size: 0.85rem; margin-top: 4px;">
-                        Continuous real-time posture tracking & rep counting. Click <b>START</b> on the camera player below to begin your workout!
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            webrtc_ctx = webrtc_streamer(
-                key="continuous-workout-streamer",
-                mode=WebRtcMode.SENDRECV,
-                rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-                video_processor_factory=WorkoutVideoProcessor,
-                media_stream_constraints={
-                    "video": {"width": {"ideal": 640}, "height": {"ideal": 480}},
-                    "audio": False,
-                },
-                async_processing=True,
-            )
-            if webrtc_ctx.video_processor:
-                webrtc_ctx.video_processor.update_exercise(st.session_state.exercise)
-                if reset_clicked:
-                    webrtc_ctx.video_processor.reset()
-                with webrtc_ctx.video_processor.lock:
-                    st.session_state.counter  = webrtc_ctx.video_processor.counter
-                    st.session_state.form_msg = webrtc_ctx.video_processor.form_msg
-                    st.session_state.form_ok  = webrtc_ctx.video_processor.form_ok
-                    webrtc_start              = webrtc_ctx.video_processor.start_time
+        cam_submode = st.radio(
+            "Camera Mode",
+            options=["🎥 Continuous Live Stream (WebRTC)", "📸 Instant Photo Snapshot"],
+            horizontal=True,
+            help="Choose Continuous Stream for 30 FPS video, or Instant Snapshot if your network blocks WebRTC P2P traffic."
+        )
 
-                if webrtc_ctx.state.playing and not st.session_state.running:
-                    st.session_state.running = True
-                    st.session_state.start_time = webrtc_start
-                elif not webrtc_ctx.state.playing and st.session_state.running:
-                    st.session_state.running = False
-        else:
+        if cam_submode == "🎥 Continuous Live Stream (WebRTC)":
+            if HAS_WEBRTC:
+                st.markdown(
+                    """
+                    <div style="background: rgba(46, 160, 67, 0.12); border: 1px solid #2ea043; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px;">
+                        <div style="color: #3fb950; font-weight: 700; font-size: 0.95rem;">🎥 Continuous Live Stream Active</div>
+                        <div style="color: #c9d1d9; font-size: 0.82rem; margin-top: 3px;">
+                            Click <b>START</b> on the camera feed below to stream at 30 FPS with real-time pose tracking.
+                            <i>(If connecting hangs due to network firewall, switch to <b>Instant Photo Snapshot</b> above!)</i>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                webrtc_ctx = webrtc_streamer(
+                    key="continuous-workout-streamer",
+                    mode=WebRtcMode.SENDRECV,
+                    rtc_configuration=RTC_CONFIGURATION,
+                    video_processor_factory=WorkoutVideoProcessor,
+                    media_stream_constraints={
+                        "video": {"width": {"ideal": 640}, "height": {"ideal": 480}},
+                        "audio": False,
+                    },
+                    async_processing=True,
+                )
+                if webrtc_ctx.video_processor:
+                    webrtc_ctx.video_processor.update_exercise(st.session_state.exercise)
+                    if reset_clicked:
+                        webrtc_ctx.video_processor.reset()
+                    with webrtc_ctx.video_processor.lock:
+                        st.session_state.counter  = webrtc_ctx.video_processor.counter
+                        st.session_state.form_msg = webrtc_ctx.video_processor.form_msg
+                        st.session_state.form_ok  = webrtc_ctx.video_processor.form_ok
+                        webrtc_start              = webrtc_ctx.video_processor.start_time
+
+                    if webrtc_ctx.state.playing and not st.session_state.running:
+                        st.session_state.running = True
+                        st.session_state.start_time = webrtc_start
+                    elif not webrtc_ctx.state.playing and st.session_state.running:
+                        st.session_state.running = False
+            else:
+                st.warning("⚠️ `streamlit-webrtc` is not installed. Switching to Instant Photo Snapshot.")
+                cam_submode = "📸 Instant Photo Snapshot"
+
+        if cam_submode == "📸 Instant Photo Snapshot":
             st.markdown(
                 """
-                <div style="background: rgba(88, 166, 255, 0.12); border: 1px solid #388bfd; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-                    <div style="color: #58a6ff; font-weight: 700; font-size: 1rem;">📷 Snapshot Camera Mode</div>
-                    <div style="color: #c9d1d9; font-size: 0.85rem; margin-top: 4px;">
-                        Take a photo to analyze your posture. (Continuous video streaming requires <code>streamlit-webrtc</code>).
+                <div style="background: rgba(88, 166, 255, 0.12); border: 1px solid #388bfd; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px;">
+                    <div style="color: #58a6ff; font-weight: 700; font-size: 0.95rem;">📸 100% Reliable Instant Photo Mode</div>
+                    <div style="color: #c9d1d9; font-size: 0.82rem; margin-top: 3px;">
+                        Bypasses all network firewalls and WebRTC restrictions. Look into the camera and click <b>Take Photo</b> to analyze form!
                     </div>
                 </div>
                 """,
